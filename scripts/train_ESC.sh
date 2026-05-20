@@ -1,5 +1,5 @@
-python train.py \
-    --dataset dataset/ESC.pkl \
+python main.py \
+    --dataset data/ESC.pkl \
     --dataset_name ESC \
     --num_folds 5 \
     --num_epochs 100 \

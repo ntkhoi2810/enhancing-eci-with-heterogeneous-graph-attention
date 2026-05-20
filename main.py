@@ -100,7 +100,7 @@ def main(args):
         for epoch in range(args.num_epochs):
             # Gọi phương thức huấn luyện và đánh giá từ class ModelTrainer
             train_p, train_r, train_f1, train_loss = trainer.train_epoch(dataloader_mask_train, dataloader_tag_train)
-            test_p, test_r, test_f1, test_loss = trainer.evaluate_epoch(dataloader_mask_test, dataloader_tag_test)
+            test_p, test_r, test_f1, test_loss = trainer.evaluate(dataloader_mask_test, dataloader_tag_test)
             
             print(f"[Epoch {epoch+1}] Train F1: {train_f1*100:.2f}% (Loss: {train_loss:.4f}) | Test F1: {test_f1*100:.2f}% (Loss: {test_loss:.4f})")
             

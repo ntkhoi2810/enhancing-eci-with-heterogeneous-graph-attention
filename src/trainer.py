@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-import model
 from utils import compute_metrics
-from src.utils import compute_metrics
 
 class ModelTrainer:
     def __init__(self, model, optimizer, device):
@@ -17,7 +15,6 @@ class ModelTrainer:
         predicted_all, gold_all = [], []
         
         for iteration, (mask_data, tag_data) in enumerate(zip(dataloader_mask, dataloader_tag)):
-            # Chuyển data sang thiết bị
             mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
             labels = tag_data['labels'].to(self.device)
             tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
@@ -43,17 +40,14 @@ class ModelTrainer:
         predicted_all_test = []
         gold_all_test = []
         with torch.no_grad():
-            iteration = 0
-            for mask_data, tag_data in zip(dataloader_mask_test, dataloader_tag_test):
-                mask_data, tag_data = mask_data.to(self.device), tag_data.to(self.device)
+            for iteration, (mask_data, tag_data) in enumerate(zip(dataloader_mask_test, dataloader_tag_test)):
                 labels = tag_data['labels'].to(self.device)
-                del mask_data['labels']
-                del tag_data['labels']
+                mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
+                tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
                 
-                outputs = model(mask_data, tag_data).squeeze(1)
+                outputs = self.model(mask_data, tag_data).squeeze(1)
                 loss = self.criterion(outputs, labels)
                 mean_loss_test = (mean_loss_test * iteration + loss.detach()) / (iteration + 1)
-                iteration += 1
 
                 predicted = torch.argmax(outputs, dim=-1)
                 predicted_all_test += list(predicted.cpu().numpy())

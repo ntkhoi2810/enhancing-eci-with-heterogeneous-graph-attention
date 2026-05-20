@@ -1,5 +1,5 @@
-python train.py \
-    --dataset dataset/CTB_dataset \
+python main.py \
+    --dataset data/CTB.pkl \
     --dataset_name CTB \
     --num_folds 10 \
     --num_epochs 100 \
@@ -10,4 +10,4 @@ python train.py \
     --d_model 1024 \
     --num_heads 16 \
     --dropout_rate 0.5 \
-    --SEED 3407
+    --SEED 3407 > logs/"CTB".log
