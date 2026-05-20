@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from utils import compute_metrics
+from src.utils import compute_metrics, EarlyStopping
 
 class ModelTrainer:
     def __init__(self, model, optimizer, device):

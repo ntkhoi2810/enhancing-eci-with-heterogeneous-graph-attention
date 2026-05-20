@@ -97,6 +97,9 @@ def main(args):
 
         # 6. Vòng lặp Epoch
         highest_f1 = 0.0
+
+        early_stopping = EarlyStopping(patience=args.patience, verbose=True)
+
         for epoch in range(args.num_epochs):
             # Gọi phương thức huấn luyện và đánh giá từ class ModelTrainer
             train_p, train_r, train_f1, train_loss = trainer.train_epoch(dataloader_mask_train, dataloader_tag_train)
@@ -105,13 +108,18 @@ def main(args):
             print(f"[Epoch {epoch+1}] Train F1: {train_f1*100:.2f}% (Loss: {train_loss:.4f}) | Test F1: {test_f1*100:.2f}% (Loss: {test_loss:.4f})")
             
             # Lưu checkpoint nếu đạt F1 cao nhất
-            if test_f1 * 100 > highest_f1:
-                highest_f1 = test_f1 * 100
+            is_new_best = early_stopping(test_f1 * 100)
+        
+            if is_new_best:
                 torch.save(model.state_dict(), os.path.join(checkpoint_path, f'best_model_fold{i+1}.pt'))
-                print(f"-> Đạt F1 cao kỷ lục mới: {highest_f1:.2f}%. Đã lưu checkpoint.")
-                
+                print(f"-> Đạt F1 cao kỷ lục mới: {test_f1*100:.2f}%. Đã lưu checkpoint.")
                 current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 record_best_scores(current_time, test_p, test_r, test_f1, os.path.join(checkpoint_path, f'best_scores_fold{i+1}.txt'))
+                
+            # Kiểm tra cờ dừng sớm
+            if early_stopping.early_stop:
+                print(f"\n[!] Đã đạt giới hạn Early Stopping. Dừng sớm Fold {i+1}!")
+                break
         
         print(f"=== Kết thúc huấn luyện Fold {i+1} ===\n")
 

@@ -25,3 +25,29 @@ def compute_metrics(gold, predicted):
 def record_best_scores(timestamp, precision, recall, f1, filename):
     with open(filename, 'a') as file:
         file.write(f"{timestamp}\t{precision*100:.2f}\t{recall*100:.2f}\t{f1*100:.2f}\n")
+
+class EarlyStopping:
+    def __init__(self, patience=10, verbose=False):
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+
+    def __call__(self, current_score):
+        if self.best_score is None:
+            self.best_score = current_score
+            return True
+            
+        elif current_score <= self.best_score:
+            self.counter += 1
+            if self.verbose:
+                print(f"-> Early stopping! Patience: {self.counter}/{self.patience}")
+            if self.counter >= self.patience:
+                self.early_stop = True
+            return False
+            
+        else:
+            self.best_score = current_score
+            self.counter = 0
+            return True

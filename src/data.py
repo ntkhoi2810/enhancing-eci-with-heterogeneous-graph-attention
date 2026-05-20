@@ -3,6 +3,11 @@ import random
 import re
 from datasets import Dataset
 
+def negative_sampling(example):
+    if example['labels'] == 0:
+        return random.random() > 0.7
+    return True
+
 def preprocess_row(row):
     sent = str(row['sentence'])
     e1 = str(row['e1'])
