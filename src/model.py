@@ -1,7 +1,6 @@
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 import torch
 import torch.nn as nn
-import random
 
 
 class ClozeAnalyzer(nn.Module):
@@ -77,11 +76,11 @@ class Discriminator(nn.Module):
 
 
 class Causal_Model(nn.Module):
-    def __init__(self, bert_path, d_model, num_heads, dropout_rate, device, visualize=False):
+    def __init__(self, bert_path, d_model, num_heads, dropout_rate, device, special_tokens=None, visualize=False):
         super(Causal_Model, self).__init__()
         
         self.tokenizer = AutoTokenizer.from_pretrained(bert_path)
-        special_tokens_dict = {'additional_special_tokens': ['<e1>','</e1>','<e2>','</e2>']}
+        special_tokens_dict = {'additional_special_tokens': special_tokens}
         self.tokenizer.add_special_tokens(special_tokens_dict)
         self.bert = AutoModelForMaskedLM.from_pretrained(bert_path)
         self.bert.resize_token_embeddings(len(self.tokenizer))

@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import random
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -14,23 +15,11 @@ def negative_sampling(example):
         return random.random() > 0.7
     return True 
 
+
 def compute_metrics(gold, predicted):
-    c_predict = 0 
-    c_correct = 0
-    c_gold = 0
-
-    for g, p in zip(gold, predicted):
-        if g != 0:
-            c_gold += 1
-        if p != 0:
-            c_predict += 1
-        if g != 0 and p != 0:
-            c_correct += 1
-
-    p = c_correct / (c_predict + 1e-100)
-    r = c_correct / c_gold
-    f = 2 * p * r / (p + r + 1e-100)
-    
+    p = precision_score(gold, predicted, zero_division=0)
+    r = recall_score(gold, predicted, zero_division=0)
+    f = f1_score(gold, predicted, zero_division=0)
     return p, r, f
 
 def record_best_scores(timestamp, precision, recall, f1, filename):
