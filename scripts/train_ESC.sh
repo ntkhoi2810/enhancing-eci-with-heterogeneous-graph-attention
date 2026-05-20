@@ -3,8 +3,8 @@ python main.py \
     --dataset_name ESC \
     --num_folds 5 \
     --num_epochs 100 \
-    --train_batchsize 16 \
-    --test_batchsize 16 \
+    --train_batchsize 20 \
+    --test_batchsize 20 \
     --learning_rate 1e-5 \
     --bert_path FacebookAI/roberta-large \
     --d_model 1024 \

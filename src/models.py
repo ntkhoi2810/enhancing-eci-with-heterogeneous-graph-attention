@@ -13,42 +13,59 @@ class ClozeAnalyzer(nn.Module):
         
     def forward(self, x, groundtruth):
 
-        token_logits = self.bert(**x).logits # z: (batch_size, length, vocab_size)
-        # mask_token_index = torch.where(x['input_ids'] == self.tokenizer.mask_token_id)[1] # z: (btz)
+        token_logits = self.bert(**x).logits
+        # mask_token_index = (x['input_ids'] == self.tokenizer.mask_token_id).int().argmax(dim=1)
+        # mask_token_logits = torch.stack( 
+        #     [ token_logits[idx, mask_token_index[idx], :] for idx in range(x['input_ids'].size(0))], 
+        #     dim=0)
+        batch_size = x['input_ids'].size(0)
+        batch_indices = torch.arange(batch_size, device=self.device)
         mask_token_index = (x['input_ids'] == self.tokenizer.mask_token_id).int().argmax(dim=1)
-        mask_token_logits = torch.stack( 
-            [ token_logits[idx, mask_token_index[idx], :] for idx in range(x['input_ids'].size(0))], 
-            dim=0) # z: (batch_size, vocab_size)
         
-        
-        gen_token = [ self.tokenizer.decode(token_id) for token_id in torch.argmax(mask_token_logits, dim=-1) ]
-        og_mask_sentences = [ self.tokenizer.decode(sequence[1:-1]) for sequence in x['input_ids'] ] 
-        gen_sentences = [sentence.replace(self.tokenizer.mask_token, gen_token[idx]) for idx, sentence in enumerate( og_mask_sentences)]
-        if self.visualize:
-            og_sentences=[ self.tokenizer.decode(sequence[1:-1]) for sequence in groundtruth['input_ids'] ] 
-            print(f"generated tokens: {gen_token}")
-            print(f"original sentences: {og_sentences}")
-            print(f"original mask sentences: {og_mask_sentences}")
-            print(f"generated sentences: {gen_sentences}")
+        mask_token_logits = token_logits[batch_indices, mask_token_index, :]
 
+        predicted_token_ids = torch.argmax(mask_token_logits, dim=-1)
+    
+        new_input_ids = x['input_ids'].clone()
+        new_input_ids[batch_indices, mask_token_index] = predicted_token_ids
+        
         outputs = self.bert.base_model(
-            **self.tokenizer(gen_sentences, return_tensors="pt", padding=True).to(self.device)
-            ).last_hidden_state # z: (batch_size, seq_len, d_model)
+            input_ids=new_input_ids,
+            attention_mask=x['attention_mask']
+        ).last_hidden_state
         
-        ret = torch.stack( 
-            [outputs[idx, mask_token_index[idx], :] for idx in range(x['input_ids'].size(0))], 
-            dim=0).unsqueeze(1) # z: (batch_size, 1, d_model)
+        ret = outputs[batch_indices, mask_token_index, :].unsqueeze(1)
         
-        return ret 
+        return ret
+        
+        # gen_token = [ self.tokenizer.decode(token_id) for token_id in torch.argmax(mask_token_logits, dim=-1) ]
+        # og_mask_sentences = [ self.tokenizer.decode(sequence[1:-1]) for sequence in x['input_ids'] ] 
+        # gen_sentences = [sentence.replace(self.tokenizer.mask_token, gen_token[idx]) for idx, sentence in enumerate( og_mask_sentences)]
+        # if self.visualize:
+        #     og_sentences=[ self.tokenizer.decode(sequence[1:-1]) for sequence in groundtruth['input_ids'] ] 
+        #     print(f"generated tokens: {gen_token}")
+        #     print(f"original sentences: {og_sentences}")
+        #     print(f"original mask sentences: {og_mask_sentences}")
+        #     print(f"generated sentences: {gen_sentences}")
+
+        # outputs = self.bert.base_model(
+        #     **self.tokenizer(gen_sentences, return_tensors="pt", padding=True).to(self.device)
+        #     ).last_hidden_state
+        
+        # ret = torch.stack( 
+        #     [outputs[idx, mask_token_index[idx], :] for idx in range(x['input_ids'].size(0))], 
+        #     dim=0).unsqueeze(1)
+        
+        # return ret 
         
 
 class Discriminator(nn.Module):
     def __init__(self, d_model, num_heads, dropout_rate, tokenizer, bert, device):
         super(Discriminator, self).__init__()
         self.mha = nn.MultiheadAttention(d_model, num_heads)
-        self.tokenizer =  tokenizer
+        self.tokenizer = tokenizer
         self.bert = bert
-        self.device= device
+        self.device = device
         # FFN
         self.fc1 = nn.Linear(d_model, 4 * d_model)
         self.relu = nn.ReLU()
@@ -63,7 +80,7 @@ class Discriminator(nn.Module):
         value =key
         x = x.permute(1, 0, 2)
         attn_output, attn_weights = self.mha(x, key, value)
-        attn_output = attn_output.permute(1, 0, 2) # z: (batch_size, 1, embedding)
+        attn_output = attn_output.permute(1, 0, 2)
 
         # FFN
         out=self.dropout(self.relu(self.fc1(attn_output)))

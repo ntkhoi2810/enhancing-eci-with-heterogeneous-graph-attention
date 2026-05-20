@@ -6,22 +6,20 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, DataCollatorWithPadding
 from tqdm import tqdm
 
-from src.utils import setup_seed, record_best_scores
+from src.utils import setup_seed, record_best_scores, EarlyStopping
 from src.data import load_and_preprocess_data, negative_sampling
 from src.models import Causal_Model
 from src.trainer import ModelTrainer
 
 
 def main(args):
-    # 1. Khởi tạo Seed hệ thống
     setup_seed(args.SEED)
+    torch.backends.cudnn.benchmark = True
     
-    # 2. Cấu hình Tokenizer & Special Tokens
     tokenizer = AutoTokenizer.from_pretrained(args.bert_path)
     special_tokens = ['<e1>', '</e1>', '<e2>', '</e2>']
     tokenizer.add_special_tokens({'additional_special_tokens': special_tokens})
     
-    # 3. Đọc và Tiền xử lý dữ liệu (Đã được chuyển vào src/data.py)
     total_dataset = load_and_preprocess_data(args.dataset)
     
     if args.dataset_name == 'ESC_star' and args.shuffle:
@@ -30,17 +28,14 @@ def main(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'\nDevice sử dụng: {device}')
 
-    # Thiết lập đường dẫn checkpoint
     fold_size = len(total_dataset) // args.num_folds
     checkpoint_path = f'checkpoints/{args.dataset_name}_{args.bert_path.split("/")[-1]}'
     os.makedirs(checkpoint_path, exist_ok=True)
     print(f"Lưu checkpoint tại: {checkpoint_path}")
 
-    # 4. Vòng lặp huấn luyện K-Fold Cross Validation
     for i in range(args.num_folds):
         print(f"\n=== Bắt đầu huấn luyện Fold {i+1}/{args.num_folds} ===")
 
-        # Phân chia chỉ mục Train / Test cho từng Fold
         test_indices = list(range(i * fold_size, (i + 1) * fold_size))
         train_indices = list(set(range(len(total_dataset))) - set(test_indices))
         
@@ -50,36 +45,35 @@ def main(args):
             
         test_fold = total_dataset.select(test_indices)
 
-        # Tokenize tập dữ liệu bằng helper function
         def tokenize_col(text_column):
             return lambda x: tokenizer(x[text_column], truncation=True)
 
         cols_to_remove = ['sentence', 'event_tagged_sentence', 'event_masked_sentence', 'e1', 'e2']
         
-        # Xử lý tập Train Fold
         masked_train = train_fold.map(tokenize_col("event_masked_sentence"), batched=True, batch_size=32).remove_columns(cols_to_remove)
         tagged_train = train_fold.map(tokenize_col("event_tagged_sentence"), batched=True, batch_size=32).remove_columns(cols_to_remove)
         masked_train.set_format("torch")
         tagged_train.set_format("torch")
 
-        # Xử lý tập Test Fold
         masked_test = test_fold.map(tokenize_col("event_masked_sentence"), batched=True, batch_size=32).remove_columns(cols_to_remove)
         tagged_test = test_fold.map(tokenize_col("event_tagged_sentence"), batched=True, batch_size=32).remove_columns(cols_to_remove)
         masked_test.set_format("torch")
         tagged_test.set_format("torch")
 
-        # Khởi tạo các DataLoader
         data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-        dataloader_mask_train = DataLoader(masked_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator)
-        dataloader_tag_train = DataLoader(tagged_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator)
-        dataloader_mask_test = DataLoader(masked_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator)
-        dataloader_tag_test = DataLoader(tagged_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator)
+        # dataloader_mask_train = DataLoader(masked_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator)
+        # dataloader_tag_train = DataLoader(tagged_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator)
+        # dataloader_mask_test = DataLoader(masked_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator)
+        # dataloader_tag_test = DataLoader(tagged_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator)
         
-        # Tqdm wrap
+        dataloader_mask_train = DataLoader(masked_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator, num_workers=4, pin_memory=True)
+        dataloader_tag_train = DataLoader(tagged_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator, num_workers=4, pin_memory=True)
+        dataloader_mask_test = DataLoader(masked_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator, num_workers=4, pin_memory=True)
+        dataloader_tag_test = DataLoader(tagged_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator, num_workers=4, pin_memory=True)
+
         dataloader_mask_train = tqdm(dataloader_mask_train, dynamic_ncols=True)
         dataloader_mask_test = tqdm(dataloader_mask_test, dynamic_ncols=True)
 
-        # 5. Khởi tạo Mô hình và Bộ tối ưu (Mô hình lấy từ src/models.py)
         model = Causal_Model(
             bert_path=args.bert_path, 
             d_model=args.d_model, 
@@ -92,11 +86,8 @@ def main(args):
         
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
         
-        # Khởi tạo đối tượng quản lý Trainer (Lấy từ src/trainer.py)
         trainer = ModelTrainer(model, optimizer, device)
 
-        # 6. Vòng lặp Epoch
-        highest_f1 = 0.0
 
         early_stopping = EarlyStopping(patience=args.patience, verbose=True)
 
@@ -105,23 +96,23 @@ def main(args):
             train_p, train_r, train_f1, train_loss = trainer.train_epoch(dataloader_mask_train, dataloader_tag_train)
             test_p, test_r, test_f1, test_loss = trainer.evaluate(dataloader_mask_test, dataloader_tag_test)
             
-            print(f"[Epoch {epoch+1}] Train F1: {train_f1*100:.2f}% (Loss: {train_loss:.4f}) | Test F1: {test_f1*100:.2f}% (Loss: {test_loss:.4f})")
+            print(f"[Epoch {epoch+1}], loss: {train_loss}")
+            print(f"Training validation:")
+            print(f"p: {test_p}, r: {test_r}, f1: {test_f1}")
             
-            # Lưu checkpoint nếu đạt F1 cao nhất
             is_new_best = early_stopping(test_f1 * 100)
         
             if is_new_best:
                 torch.save(model.state_dict(), os.path.join(checkpoint_path, f'best_model_fold{i+1}.pt'))
-                print(f"-> Đạt F1 cao kỷ lục mới: {test_f1*100:.2f}%. Đã lưu checkpoint.")
+                print(f"-> NEW BEST F1: {test_f1*100:.2f}%. CHECKPOINT SAVED!")
                 current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 record_best_scores(current_time, test_p, test_r, test_f1, os.path.join(checkpoint_path, f'best_scores_fold{i+1}.txt'))
                 
-            # Kiểm tra cờ dừng sớm
             if early_stopping.early_stop:
-                print(f"\n[!] Đã đạt giới hạn Early Stopping. Dừng sớm Fold {i+1}!")
+                print(f"\n[!] EARLY STOPPING TRIGGED | FOLD {i+1}!")
                 break
         
-        print(f"=== Kết thúc huấn luyện Fold {i+1} ===\n")
+        print(f"=== END OF TRAINING | FOLD {i+1} ===\n")
 
 
 if __name__ == '__main__':
