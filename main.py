@@ -50,13 +50,29 @@ def main(args):
 
         cols_to_remove = ['sentence', 'event_tagged_sentence', 'event_masked_sentence', 'e1', 'e2']
         
-        masked_train = train_fold.map(tokenize_col("event_masked_sentence"), batched=True, batch_size=32).remove_columns(cols_to_remove)
-        tagged_train = train_fold.map(tokenize_col("event_tagged_sentence"), batched=True, batch_size=32).remove_columns(cols_to_remove)
+        masked_train = train_fold.map(
+            tokenize_col("event_masked_sentence"), 
+            batched=True, batch_size=32
+        ).remove_columns(cols_to_remove)
+        
+        tagged_train = train_fold.map(
+            tokenize_col("event_tagged_sentence"), 
+            batched=True, batch_size=32
+        ).remove_columns(cols_to_remove)
+        
         masked_train.set_format("torch")
         tagged_train.set_format("torch")
 
-        masked_test = test_fold.map(tokenize_col("event_masked_sentence"), batched=True, batch_size=32).remove_columns(cols_to_remove)
-        tagged_test = test_fold.map(tokenize_col("event_tagged_sentence"), batched=True, batch_size=32).remove_columns(cols_to_remove)
+        masked_test = test_fold.map(
+            tokenize_col("event_masked_sentence"), 
+            batched=True, batch_size=32
+            ).remove_columns(cols_to_remove)
+        
+        tagged_test = test_fold.map(
+            tokenize_col("event_tagged_sentence"), 
+            batched=True, batch_size=32
+        ).remove_columns(cols_to_remove)
+        
         masked_test.set_format("torch")
         tagged_test.set_format("torch")
 
@@ -66,10 +82,38 @@ def main(args):
         # dataloader_mask_test = DataLoader(masked_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator)
         # dataloader_tag_test = DataLoader(tagged_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator)
         
-        dataloader_mask_train = DataLoader(masked_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator, num_workers=4, pin_memory=True)
-        dataloader_tag_train = DataLoader(tagged_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator, num_workers=4, pin_memory=True)
-        dataloader_mask_test = DataLoader(masked_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator, num_workers=4, pin_memory=True)
-        dataloader_tag_test = DataLoader(tagged_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator, num_workers=4, pin_memory=True)
+        dataloader_mask_train = DataLoader(
+            masked_train, 
+            shuffle=False, 
+            batch_size=args.train_batchsize, 
+            collate_fn=data_collator, 
+            num_workers=4, 
+            pin_memory=True
+        )
+        dataloader_tag_train = DataLoader(
+            tagged_train, 
+            shuffle=False, 
+            batch_size=args.train_batchsize, 
+            collate_fn=data_collator, 
+            num_workers=4, 
+            pin_memory=True
+        )
+        dataloader_mask_test = DataLoader(
+            masked_test, 
+            shuffle=False, 
+            batch_size=args.test_batchsize, 
+            collate_fn=data_collator, 
+            num_workers=4, 
+            pin_memory=True
+        )
+        dataloader_tag_test = DataLoader(
+            tagged_test, 
+            shuffle=False, 
+            batch_size=args.test_batchsize, 
+            collate_fn=data_collator, 
+            num_workers=4, 
+            pin_memory=True
+        )
 
         dataloader_mask_train = tqdm(dataloader_mask_train, dynamic_ncols=True)
         dataloader_mask_test = tqdm(dataloader_mask_test, dynamic_ncols=True)
@@ -106,7 +150,13 @@ def main(args):
                 torch.save(model.state_dict(), os.path.join(checkpoint_path, f'best_model_fold{i+1}.pt'))
                 print(f"-> NEW BEST F1: {test_f1*100:.2f}%. CHECKPOINT SAVED!")
                 current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                record_best_scores(current_time, test_p, test_r, test_f1, os.path.join(checkpoint_path, f'best_scores_fold{i+1}.txt'))
+                record_best_scores(
+                    current_time, 
+                    test_p, 
+                    test_r, 
+                    test_f1, 
+                    os.path.join(checkpoint_path, f'best_scores_fold{i+1}.txt')
+                )
                 
             if early_stopping.early_stop:
                 print(f"\n[!] EARLY STOPPING TRIGGED | FOLD {i+1}!")
