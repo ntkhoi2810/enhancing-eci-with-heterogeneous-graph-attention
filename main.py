@@ -22,8 +22,8 @@ def main(args):
     
     total_dataset = load_and_preprocess_data(args.dataset)
     
-    if args.dataset_name == 'ESC_star' and args.shuffle:
-        total_dataset = total_dataset.shuffle(seed=args.SEED)
+    # if args.dataset_name == 'ESC_star' and args.shuffle:
+    total_dataset = total_dataset.shuffle(seed=args.SEED)
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'\nDevice: {device}')
@@ -40,8 +40,11 @@ def main(args):
         train_indices = list(set(range(len(total_dataset))) - set(test_indices))
         
         train_fold = total_dataset.select(train_indices)
+        train_fold = train_fold.shuffle(seed=args.SEED)
+
         if args.dataset_name == 'CTB':
-            train_fold = train_fold.shuffle(seed=args.SEED).filter(negative_sampling)
+            # train_fold = train_fold.shuffle(seed=args.SEED).filter(negative_sampling)
+            train_fold = train_fold.filter(negative_sampling)
             
         test_fold = total_dataset.select(test_indices)
 

@@ -24,16 +24,29 @@ class ClozeAnalyzer(nn.Module):
         
         mask_token_logits = token_logits[batch_indices, mask_token_index, :]
 
-        predicted_token_ids = torch.argmax(mask_token_logits, dim=-1)
+        # predicted_token_ids = torch.argmax(mask_token_logits, dim=-1)
     
-        new_input_ids = x['input_ids'].clone()
-        new_input_ids[batch_indices, mask_token_index] = predicted_token_ids
+        # new_input_ids = x['input_ids'].clone()
+        # new_input_ids[batch_indices, mask_token_index] = predicted_token_ids
         
+        # outputs = self.bert.base_model(
+        #     input_ids=new_input_ids,
+        #     attention_mask=x['attention_mask']
+        # ).last_hidden_state
+
+        soft_probs = torch.softmax(mask_token_logits, dim=-1) 
+
+        word_embeddings = self.bert.get_input_embeddings().weight
+        predicted_embeds = torch.matmul(soft_probs, word_embeddings)
+
+        inputs_embeds = self.bert.get_input_embeddings()(x['input_ids'])
+        inputs_embeds[batch_indices, mask_token_index] = predicted_embeds
+
         outputs = self.bert.base_model(
-            input_ids=new_input_ids,
+            inputs_embeds=inputs_embeds,
             attention_mask=x['attention_mask']
         ).last_hidden_state
-        
+                
         ret = outputs[batch_indices, mask_token_index, :].unsqueeze(1)
         
         return ret

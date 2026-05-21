@@ -12,7 +12,7 @@ class ModelTrainer:
         self.criterion = nn.CrossEntropyLoss()
         self.scaler = GradScaler()
 
-    def train_epoch(self, dataloader_mask, dataloader_tag):
+    def train_epoch(self, dataloader_mask, dataloader_tag, epoch_info):
         self.model.train()
         mean_loss = torch.zeros(1).to(self.device)
         predicted_all, gold_all = [], []
@@ -24,8 +24,9 @@ class ModelTrainer:
             labels = tag_data['labels'].to(self.device)
             tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
             
-            outputs = self.model(mask_data, tag_data).squeeze(1)
-            loss = self.criterion(outputs, labels)
+            with autocast('cuda'):
+                outputs = self.model(mask_data, tag_data).squeeze(1)
+                loss = self.criterion(outputs, labels)
             
             self.optimizer.zero_grad()
             
@@ -46,7 +47,7 @@ class ModelTrainer:
         p, r, f1 = compute_metrics(gold_all, predicted_all)
         return p, r, f1, mean_loss.item()
     
-    def evaluate(self, dataloader_mask_test, dataloader_tag_test):
+    def evaluate(self, dataloader_mask_test, dataloader_tag_test, epoch_info):
         self.model.eval()
         mean_loss_test = 0
         predicted_all_test = []
