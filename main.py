@@ -26,15 +26,15 @@ def main(args):
         total_dataset = total_dataset.shuffle(seed=args.SEED)
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f'\nDevice sử dụng: {device}')
+    print(f'\nDevice: {device}')
 
     fold_size = len(total_dataset) // args.num_folds
     checkpoint_path = f'checkpoints/{args.dataset_name}_{args.bert_path.split("/")[-1]}'
     os.makedirs(checkpoint_path, exist_ok=True)
-    print(f"Lưu checkpoint tại: {checkpoint_path}")
+    print(f"Saved checkpoint tại: {checkpoint_path}")
 
     for i in range(args.num_folds):
-        print(f"\n=== Bắt đầu huấn luyện Fold {i+1}/{args.num_folds} ===")
+        print(f"\n=== Training | Fold {i+1}/{args.num_folds} ===")
 
         test_indices = list(range(i * fold_size, (i + 1) * fold_size))
         train_indices = list(set(range(len(total_dataset))) - set(test_indices))
@@ -142,7 +142,7 @@ def main(args):
             
             print(f"[Epoch {epoch+1}], loss: {train_loss}")
             print(f"Training validation:")
-            print(f"p: {test_p}, r: {test_r}, f1: {test_f1}")
+            print(f"p: {test_p:.4f}, r: {test_r:.4f}, f1: {test_f1:.4f}")
             
             is_new_best = early_stopping(test_f1 * 100)
         
@@ -172,6 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_folds', type=int, default=5)
     parser.add_argument('--num_epochs', type=int, default=50)
     parser.add_argument('--train_batchsize', type=int, default=20)
+    parser.add_argument('--patience', type=int, default=7)
     parser.add_argument('--test_batchsize', type=int, default=20)
     parser.add_argument('--learning_rate', type=float, default=1e-5)
     parser.add_argument('--bert_path', type=str, default='FacebookAI/roberta-large')
