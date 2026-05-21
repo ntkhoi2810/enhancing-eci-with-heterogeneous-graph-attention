@@ -40,7 +40,7 @@ class ClozeAnalyzer(nn.Module):
         predicted_embeds = torch.matmul(soft_probs, word_embeddings)
 
         inputs_embeds = self.bert.get_input_embeddings()(x['input_ids'])
-        inputs_embeds[batch_indices, mask_token_index] = predicted_embeds
+        inputs_embeds[batch_indices, mask_token_index] = predicted_embeds.to(inputs_embeds.dtype)
 
         outputs = self.bert.base_model(
             inputs_embeds=inputs_embeds,

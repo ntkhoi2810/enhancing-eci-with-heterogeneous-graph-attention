@@ -31,7 +31,7 @@ def main(args):
     fold_size = len(total_dataset) // args.num_folds
     checkpoint_path = f'checkpoints/{args.dataset_name}_{args.bert_path.split("/")[-1]}'
     os.makedirs(checkpoint_path, exist_ok=True)
-    print(f"Saved checkpoint tại: {checkpoint_path}")
+    print(f"Saved checkpoint at: {checkpoint_path}")
 
     for i in range(args.num_folds):
         print(f"\n=== Training | Fold {i+1}/{args.num_folds} ===")
