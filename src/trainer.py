@@ -19,7 +19,7 @@ class ModelTrainer:
 
         pbar = tqdm(zip(dataloader_mask, dataloader_tag), total=len(dataloader_mask), desc=f"Train {epoch_info}", dynamic_ncols=True, leave=False)
         
-        for iteration, (mask_data, tag_data) in enumerate(zip(dataloader_mask, dataloader_tag)):
+        for iteration, (mask_data, tag_data) in enumerate(pbar):
             mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
             labels = tag_data['labels'].to(self.device)
             tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
@@ -55,7 +55,7 @@ class ModelTrainer:
         pbar = tqdm(zip(dataloader_mask_test, dataloader_tag_test), total=len(dataloader_mask_test), desc=f"Eval  {epoch_info}", dynamic_ncols=True, leave=False)
         
         with torch.no_grad():
-            for iteration, (mask_data, tag_data) in enumerate(zip(dataloader_mask_test, dataloader_tag_test)):
+            for iteration, (mask_data, tag_data) in enumerate(pbar):
                 labels = tag_data['labels'].to(self.device)
                 mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
                 tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
