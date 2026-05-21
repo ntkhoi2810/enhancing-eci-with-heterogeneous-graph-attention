@@ -115,8 +115,8 @@ def main(args):
             pin_memory=True
         )
 
-        dataloader_mask_train = tqdm(dataloader_mask_train, dynamic_ncols=True)
-        dataloader_mask_test = tqdm(dataloader_mask_test, dynamic_ncols=True)
+        # dataloader_mask_train = tqdm(dataloader_mask_train, dynamic_ncols=True)
+        # dataloader_mask_test = tqdm(dataloader_mask_test, dynamic_ncols=True)
 
         model = Causal_Model(
             bert_path=args.bert_path, 
@@ -136,7 +136,6 @@ def main(args):
         early_stopping = EarlyStopping(patience=args.patience, verbose=True)
 
         for epoch in range(args.num_epochs):
-            # Gọi phương thức huấn luyện và đánh giá từ class ModelTrainer
             train_p, train_r, train_f1, train_loss = trainer.train_epoch(dataloader_mask_train, dataloader_tag_train)
             test_p, test_r, test_f1, test_loss = trainer.evaluate(dataloader_mask_test, dataloader_tag_test)
             
