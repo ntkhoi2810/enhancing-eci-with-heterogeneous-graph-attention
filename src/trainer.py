@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from src.utils import compute_metrics
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import autocast, GradScaler
 
 class ModelTrainer:
     def __init__(self, model, optimizer, device):
@@ -9,7 +9,7 @@ class ModelTrainer:
         self.optimizer = optimizer
         self.device = device
         self.criterion = nn.CrossEntropyLoss()
-        self.scaler = GradScaler
+        self.scaler = GradScaler()
 
     def train_epoch(self, dataloader_mask, dataloader_tag):
         self.model.train()
@@ -21,9 +21,8 @@ class ModelTrainer:
             labels = tag_data['labels'].to(self.device)
             tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
             
-            with autocast:
-                outputs = self.model(mask_data, tag_data).squeeze(1)
-                loss = self.criterion(outputs, labels)
+            outputs = self.model(mask_data, tag_data).squeeze(1)
+            loss = self.criterion(outputs, labels)
             
             self.optimizer.zero_grad()
             
@@ -50,19 +49,18 @@ class ModelTrainer:
         predicted_all_test = []
         gold_all_test = []
         with torch.no_grad():
-            with autocast:
-                for iteration, (mask_data, tag_data) in enumerate(zip(dataloader_mask_test, dataloader_tag_test)):
-                    labels = tag_data['labels'].to(self.device)
-                    mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
-                    tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
-                    
-                    outputs = self.model(mask_data, tag_data).squeeze(1)
-                    loss = self.criterion(outputs, labels)
-                    mean_loss_test = (mean_loss_test * iteration + loss.detach()) / (iteration + 1)
+            for iteration, (mask_data, tag_data) in enumerate(zip(dataloader_mask_test, dataloader_tag_test)):
+                labels = tag_data['labels'].to(self.device)
+                mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
+                tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
+                
+                outputs = self.model(mask_data, tag_data).squeeze(1)
+                loss = self.criterion(outputs, labels)
+                mean_loss_test = (mean_loss_test * iteration + loss.detach()) / (iteration + 1)
 
-                    predicted = torch.argmax(outputs, dim=-1)
-                    predicted_all_test += list(predicted.cpu().numpy())
-                    gold_all_test += list(labels.cpu().numpy())
+                predicted = torch.argmax(outputs, dim=-1)
+                predicted_all_test += list(predicted.cpu().numpy())
+                gold_all_test += list(labels.cpu().numpy())
         
         p, r, f1 = compute_metrics(gold_all_test, predicted_all_test)
         return p, r, f1, mean_loss_test.item()
