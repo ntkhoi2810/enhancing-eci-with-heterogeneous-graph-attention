@@ -10,4 +10,4 @@ python main.py \
     --d_model 1024 \
     --num_heads 16 \
     --dropout_rate 0.5 \
-    --SEED 3407 > logs/"ESC".log
+    --SEED 3407 > logs/"ESC_dev".log

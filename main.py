@@ -2,6 +2,7 @@ import argparse
 import os
 import datetime
 import torch
+import numpy as np 
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, DataCollatorWithPadding
 from tqdm import tqdm
@@ -39,14 +40,24 @@ def main(args):
         test_indices = list(range(i * fold_size, (i + 1) * fold_size))
         train_indices = list(set(range(len(total_dataset))) - set(test_indices))
         
-        train_fold = total_dataset.select(train_indices)
-        train_fold = train_fold.shuffle(seed=args.SEED)
+        train_fold = total_dataset.select(train_indices).shuffle(seed=args.SEED)
 
-        if args.dataset_name == 'CTB':
-            # train_fold = train_fold.shuffle(seed=args.SEED).filter(negative_sampling)
-            train_fold = train_fold.filter(negative_sampling)
+        # if args.dataset_name == 'CTB':
+        #     # train_fold = train_fold.shuffle(seed=args.SEED).filter(negative_sampling)
+        #     train_fold = train_fold.filter(negative_sampling)
             
         test_fold = total_dataset.select(test_indices)
+
+        labels = train_fold['labels']
+        count_0 = labels.count(0)
+        count_1 = labels.count(1)
+        total_samples = len(labels)
+
+        weight_0 = total_samples / (2.0 * count_0)
+        weight_1 = total_samples / (2.0 * count_1)
+        class_weights = torch.tensor([weight_0, weight_1], dtype=torch.float)
+
+        print(f"[*] Class Weights Fold {i+1}: Normal (0) = {weight_0:.4f}, Causal (1) = {weight_1:.4f}")
 
         def tokenize_col(text_column):
             return lambda x: tokenizer(x[text_column], truncation=True)
@@ -133,7 +144,7 @@ def main(args):
         
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
         
-        trainer = ModelTrainer(model, optimizer, device)
+        trainer = ModelTrainer(model, optimizer, device, class_weights, gamma=args.focal_gamma)
 
 
         early_stopping = EarlyStopping(patience=args.patience, verbose=True)
@@ -187,6 +198,7 @@ if __name__ == '__main__':
     parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--SEED', type=int, default=3407)
     parser.add_argument('--shuffle', action='store_true')
+    parser.add_argument('--focal_gamma', type=float, default=2.0, help='Gamma value for Focal Loss')
 
     args = parser.parse_args()
     main(args)

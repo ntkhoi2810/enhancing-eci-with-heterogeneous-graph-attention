@@ -1,15 +1,22 @@
 import torch
 import torch.nn as nn
 from src.utils import compute_metrics
+from src.loss import FocalLoss
 from torch.amp import autocast, GradScaler
 from tqdm import tqdm
 
 class ModelTrainer:
-    def __init__(self, model, optimizer, device):
+    def __init__(self, model, optimizer, device, class_weights=None, gamma=2.0):
         self.model = model
         self.optimizer = optimizer
         self.device = device
-        self.criterion = nn.CrossEntropyLoss()
+
+        if class_weights is not None:
+            class_weights = class_weights.to(device)
+        
+        # self.criterion = nn.CrossEntropyLoss()
+        self.criterion = FocalLoss(weight=class_weights, gamma=gamma)
+        
         self.scaler = GradScaler()
 
     def train_epoch(self, dataloader_mask, dataloader_tag, epoch_info):
