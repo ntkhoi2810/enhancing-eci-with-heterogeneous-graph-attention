@@ -136,8 +136,11 @@ def main(args):
         early_stopping = EarlyStopping(patience=args.patience, verbose=True)
 
         for epoch in range(args.num_epochs):
-            train_p, train_r, train_f1, train_loss = trainer.train_epoch(dataloader_mask_train, dataloader_tag_train)
-            test_p, test_r, test_f1, test_loss = trainer.evaluate(dataloader_mask_test, dataloader_tag_test)
+
+            ep_info = f"[Ep {epoch+1}/{args.num_epochs}]"
+            
+            train_p, train_r, train_f1, train_loss = trainer.train_epoch(dataloader_mask_train, dataloader_tag_train, ep_info)
+            test_p, test_r, test_f1, test_loss = trainer.evaluate(dataloader_mask_test, dataloader_tag_test, ep_info)
             
             print(f"[Epoch {epoch+1}], loss: {train_loss}")
             print(f"Training validation:")
