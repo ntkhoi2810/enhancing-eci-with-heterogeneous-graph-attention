@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from src.utils import compute_metrics
 from torch.amp import autocast, GradScaler
+from tqdm import tqdm
 
 class ModelTrainer:
     def __init__(self, model, optimizer, device):
@@ -15,6 +16,8 @@ class ModelTrainer:
         self.model.train()
         mean_loss = torch.zeros(1).to(self.device)
         predicted_all, gold_all = [], []
+
+        pbar = tqdm(zip(dataloader_mask, dataloader_tag), total=len(dataloader_mask), desc=f"Train {epoch_info}", dynamic_ncols=True, leave=False)
         
         for iteration, (mask_data, tag_data) in enumerate(zip(dataloader_mask, dataloader_tag)):
             mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
@@ -48,6 +51,9 @@ class ModelTrainer:
         mean_loss_test = 0
         predicted_all_test = []
         gold_all_test = []
+
+        pbar = tqdm(zip(dataloader_mask_test, dataloader_tag_test), total=len(dataloader_mask_test), desc=f"Eval  {epoch_info}", dynamic_ncols=True, leave=False)
+        
         with torch.no_grad():
             for iteration, (mask_data, tag_data) in enumerate(zip(dataloader_mask_test, dataloader_tag_test)):
                 labels = tag_data['labels'].to(self.device)
