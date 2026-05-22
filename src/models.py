@@ -105,6 +105,26 @@ class Discriminator(nn.Module):
       
 
 
+# class Causal_Model(nn.Module):
+#     def __init__(self, bert_path, d_model, num_heads, dropout_rate, device, special_tokens=None, visualize=False):
+#         super(Causal_Model, self).__init__()
+        
+#         self.tokenizer = AutoTokenizer.from_pretrained(bert_path)
+#         special_tokens_dict = {'additional_special_tokens': special_tokens}
+#         self.tokenizer.add_special_tokens(special_tokens_dict)
+#         self.bert = AutoModelForMaskedLM.from_pretrained(bert_path)
+#         self.bert.resize_token_embeddings(len(self.tokenizer))
+        
+#         self.generator = ClozeAnalyzer(self.tokenizer, self.bert, device, visualize)
+#         self.discriminator = Discriminator(d_model, num_heads, dropout_rate, self.tokenizer, self.bert, device)
+        
+
+#     def forward(self, x, groundtruth):
+        
+#         out=self.generator(x, groundtruth) 
+#         out=self.discriminator(out, groundtruth)
+#         return out
+
 class Causal_Model(nn.Module):
     def __init__(self, bert_path, d_model, num_heads, dropout_rate, device, special_tokens=None, visualize=False):
         super(Causal_Model, self).__init__()
@@ -118,9 +138,85 @@ class Causal_Model(nn.Module):
         self.generator = ClozeAnalyzer(self.tokenizer, self.bert, device, visualize)
         self.discriminator = Discriminator(d_model, num_heads, dropout_rate, self.tokenizer, self.bert, device)
         
-
-    def forward(self, x, groundtruth):
+        # ---> MỚI: Thiết lập Mạng Heterogeneous Graph Attention Network (HAN)
+        self.device = device
+        # Định nghĩa các loại Node và Cạnh (Metadata cho HANConv)
+        self.metadata = (
+            ['word'], 
+            [('word', 'nsubj', 'word'), ('word', 'prep', 'word'), 
+             ('word', 'pobj', 'word'), ('word', 'dobj', 'word'), 
+             ('word', 'amod', 'word'), ('word', 'ROOT', 'word'), ('word', 'other', 'word')]
+        )
         
-        out=self.generator(x, groundtruth) 
-        out=self.discriminator(out, groundtruth)
+        # d_model // 2 vì lát nữa ta sẽ nối (concat) e1 và e2 -> size d_model
+        self.han = HANConv(
+            in_channels=d_model, 
+            out_channels=d_model // 2, 
+            metadata=self.metadata, 
+            heads=2,
+            dropout=dropout_rate
+        )
+        
+        # Lớp để Fusion (Kết hợp Output của BERT Mask + Output của Mạng Đồ thị)
+        # d_model (Cloze) + d_model (HAN) = d_model * 2
+        self.fusion_fc = nn.Linear(d_model * 2, d_model)
+        self.layer_norm = nn.LayerNorm(d_model)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, groundtruth, graph_data):
+        """
+        graph_data: dictionary chứa các features về đồ thị theo batch (được map từ src/data.py)
+        - graph_data['edges']: List các dictionary mô tả edge_index_dict cho HANConv
+        - graph_data['e1_idx'], graph_data['e2_idx']: Vị trí node của e1, e2
+        """
+        
+        # 1. Output gốc từ ClozeAnalyzer (Shape: [batch_size, 1, d_model])
+        cloze_out = self.generator(x, groundtruth) 
+        
+        # 2. Xử lý Đồ thị ngữ pháp (Syntax-Aware Graph)
+        # Lấy base features từ BERT làm features ban đầu cho các Nodes
+        bert_features = self.bert.base_model(**groundtruth).last_hidden_state
+        batch_size = cloze_out.size(0)
+        
+        e_graph_reps = []
+        
+        for i in range(batch_size):
+            # Tạo dictionary input cho HANConv
+            x_dict = {'word': bert_features[i]} 
+            
+            # Khôi phục đồ thị của câu hiện tại dạng PyTorch Tensors
+            edges = graph_data['edges'][i]
+            edge_index_dict = {
+                rel: torch.tensor(indices, dtype=torch.long).to(self.device)
+                for rel, indices in edges.items()
+            }
+            
+            # Forward qua Mạng Đồ Thị (HAN)
+            han_out = self.han(x_dict, edge_index_dict)
+            word_embs = han_out['word'] # Node embeddings đã mang thông tin ngữ pháp
+            
+            # Trích xuất biểu diễn của Node e1 và Node e2
+            idx_1 = min(graph_data['e1_idx'][i], word_embs.size(0) - 1)
+            idx_2 = min(graph_data['e2_idx'][i], word_embs.size(0) - 1)
+            
+            e1_emb = word_embs[idx_1] # Shape: [d_model // 2]
+            e2_emb = word_embs[idx_2] # Shape: [d_model // 2]
+            
+            # Nối (Concatenate) 2 events để tạo vector quan hệ qua GNN
+            e_pair = torch.cat([e1_emb, e2_emb], dim=-1).unsqueeze(0) # [1, d_model]
+            e_graph_reps.append(e_pair)
+            
+        e_graph_reps = torch.stack(e_graph_reps, dim=0) # [batch_size, 1, d_model]
+        
+        # 3. MỚI: Feature Fusion
+        # Nối đặc trưng của Cloze Text và HAN Graph
+        fused_features = torch.cat([cloze_out, e_graph_reps], dim=-1) # [batch_size, 1, d_model * 2]
+        
+        # Nén lại về chiều d_model và thêm Residual Connection
+        fused_features = self.relu(self.fusion_fc(fused_features))
+        fused_features = self.layer_norm(cloze_out + fused_features) # Identity mapping với raw cloze
+        
+        # 4. Đưa vector đã dung hợp vào Discriminator
+        out = self.discriminator(fused_features, groundtruth)
+        
         return out
