@@ -4,47 +4,43 @@ Saved checkpoint at: checkpoints/ESC_roberta-large
 
 === Training | Fold 1/5 ===
 [*] Class Weights Fold 1: Normal (0) = 0.6448, Causal (1) = 2.2268
-[Epoch 1], loss: 0.2139483541250229
+[Epoch 1], loss: 0.21355557441711426
 Training validation:
-p: 0.2707, r: 0.9429, f1: 0.4206
--> NEW BEST F1: 42.06%. CHECKPOINT SAVED!
-[Epoch 2], loss: 0.18730653822422028
+p: 0.4156, r: 0.7962, f1: 0.5461
+-> NEW BEST F1: 54.61%. CHECKPOINT SAVED!
+[Epoch 2], loss: 0.16639162600040436
 Training validation:
-p: 0.3050, r: 0.9864, f1: 0.4660
--> NEW BEST F1: 46.60%. CHECKPOINT SAVED!
-[Epoch 3], loss: 0.15682415664196014
+p: 0.4310, r: 0.8913, f1: 0.5810
+-> NEW BEST F1: 58.10%. CHECKPOINT SAVED!
+[Epoch 3], loss: 0.133383110165596
 Training validation:
-p: 0.5043, r: 0.7962, f1: 0.6175
--> NEW BEST F1: 61.75%. CHECKPOINT SAVED!
-[Epoch 4], loss: 0.13461939990520477
+p: 0.5057, r: 0.8505, f1: 0.6342
+-> NEW BEST F1: 63.42%. CHECKPOINT SAVED!
+[Epoch 4], loss: 0.11898071318864822
 Training validation:
-p: 0.4893, r: 0.8723, f1: 0.6270
--> NEW BEST F1: 62.70%. CHECKPOINT SAVED!
-[Epoch 5], loss: 0.10234466940164566
+p: 0.6216, r: 0.6875, f1: 0.6529
+-> NEW BEST F1: 65.29%. CHECKPOINT SAVED!
+[Epoch 5], loss: 0.09432291984558105
 Training validation:
-p: 0.6339, r: 0.7527, f1: 0.6882
--> NEW BEST F1: 68.82%. CHECKPOINT SAVED!
-[Epoch 6], loss: 0.08974362164735794
+p: 0.6205, r: 0.7418, f1: 0.6757
+-> NEW BEST F1: 67.57%. CHECKPOINT SAVED!
+[Epoch 6], loss: 0.08118057996034622
 Training validation:
-p: 0.6455, r: 0.7473, f1: 0.6927
--> NEW BEST F1: 69.27%. CHECKPOINT SAVED!
-[Epoch 7], loss: 0.08033914864063263
-Training validation:
-p: 0.7552, r: 0.5870, f1: 0.6606
+p: 0.7068, r: 0.6223, f1: 0.6618
 -> Early stopping! Patience: 1/7
-[Epoch 8], loss: 0.06826894730329514
+[Epoch 7], loss: 0.07631047070026398
 Training validation:
-p: 0.7318, r: 0.6821, f1: 0.7060
--> NEW BEST F1: 70.60%. CHECKPOINT SAVED!
-[Epoch 9], loss: 0.06042133644223213
+p: 0.7267, r: 0.6576, f1: 0.6904
+-> NEW BEST F1: 69.04%. CHECKPOINT SAVED!
+[Epoch 8], loss: 0.06499633193016052
 Training validation:
-p: 0.7695, r: 0.6440, f1: 0.7012
+p: 0.7122, r: 0.6658, f1: 0.6882
 -> Early stopping! Patience: 1/7
-[Epoch 10], loss: 0.057081375271081924
+[Epoch 9], loss: 0.06679617613554001
 Training validation:
-p: 0.7158, r: 0.7255, f1: 0.7206
--> NEW BEST F1: 72.06%. CHECKPOINT SAVED!
-[Epoch 11], loss: 0.05243769288063049
+p: 0.7280, r: 0.7201, f1: 0.7240
+-> NEW BEST F1: 72.40%. CHECKPOINT SAVED!
+[Epoch 10], loss: 0.056372418999671936
 Training validation:
-p: 0.7376, r: 0.6875, f1: 0.7117
+p: 0.7201, r: 0.7201, f1: 0.7201
 -> Early stopping! Patience: 1/7

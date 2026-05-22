@@ -70,20 +70,17 @@ def extract_syntax_graph(sent, e1, e2):
     e1_idx, e2_idx = 0, 0
     
     for token in doc:
-        # 1. Tìm index của các node e1, e2 (mapping cơ bản theo string)
         if e1.lower() in token.text.lower(): e1_idx = token.i
         if e2.lower() in token.text.lower(): e2_idx = token.i
         
-        # 2. Xây dựng danh sách cạnh theo từng nhãn phụ thuộc (Edge Types)
-        # Giới hạn số lượng nhãn hoặc map các nhãn hiếm về 'other'
+        # Chỉ sử dụng string làm key để PyArrow có thể lưu trữ được
         rel = token.dep_ if token.dep_ in ['nsubj', 'prep', 'pobj', 'dobj', 'amod', 'ROOT'] else 'other'
-        edge_type = ('word', rel, 'word')
         
-        if edge_type not in edges:
-            edges[edge_type] = [[], []]
+        if rel not in edges:
+            edges[rel] = [[], []]
             
-        edges[edge_type][0].append(token.head.i) # Source node
-        edges[edge_type][1].append(token.i)      # Target node
+        edges[rel][0].append(token.head.i) # Source node
+        edges[rel][1].append(token.i)      # Target node
         
     return edges, e1_idx, e2_idx
 
