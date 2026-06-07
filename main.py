@@ -255,7 +255,9 @@ def main(args):
     tokenizer.add_special_tokens({'additional_special_tokens': special_tokens})
     
     total_dataset = load_and_preprocess_data(args.dataset)
-    total_dataset = total_dataset.shuffle(seed=args.SEED)
+    # total_dataset = total_dataset.shuffle(seed=args.SEED)
+    if "ESC" not in args.dataset_name or args.shuffle:
+        total_dataset = total_dataset.shuffle(seed=args.SEED)
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'\nDevice: {device}')
