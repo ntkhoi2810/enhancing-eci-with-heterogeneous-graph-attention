@@ -2,6 +2,7 @@ lxml
 numpy
 pandas
 torch
+torch-geometric
 tqdm
 transformers
 datasets

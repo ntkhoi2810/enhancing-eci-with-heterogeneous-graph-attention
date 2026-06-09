@@ -1,4 +1,4 @@
-python train.py \
+python main.py \
     --dataset dataset/ESC_dataset \
     --dataset_name ESC_star \
     --num_folds 5 \

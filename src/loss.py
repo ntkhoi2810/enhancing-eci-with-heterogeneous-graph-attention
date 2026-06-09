@@ -1,24 +1,54 @@
-import torch 
-import torch.nn.functional as F
+"""
+Focal Loss implementation for class-imbalanced classification.
+"""
+
+from typing import Optional
+
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 
 class FocalLoss(nn.Module):
-    def __init__(self, weight=None, gamma=2.0, reduction='mean'):
-        super(FocalLoss, self).__init__()
+    """Focal Loss (Lin et al., 2017) for handling class imbalance.
+
+    Down-weights well-classified examples so the model focuses on hard
+    negatives.  When ``gamma = 0`` this reduces to standard cross-entropy.
+
+    Args:
+        weight: Per-class weights tensor of shape ``(num_classes,)``.
+        gamma: Focusing parameter (≥ 0). Higher values suppress easy examples
+            more aggressively.
+        reduction: ``'mean'``, ``'sum'``, or ``'none'``.
+    """
+
+    def __init__(
+        self,
+        weight: Optional[torch.Tensor] = None,
+        gamma: float = 2.0,
+        reduction: str = "mean",
+    ) -> None:
+        super().__init__()
         self.weight = weight
         self.gamma = gamma
         self.reduction = reduction
 
-    def forward(self, inputs, targets):
-        ce_loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction='none')
-        
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        """Compute focal loss.
+
+        Args:
+            inputs: Raw logits of shape ``(N, C)``.
+            targets: Ground-truth class indices of shape ``(N,)``.
+
+        Returns:
+            Scalar loss (or per-sample if ``reduction='none'``).
+        """
+        ce_loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction="none")
         pt = torch.exp(-ce_loss)
-        
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
-        
-        if self.reduction == 'mean':
+
+        if self.reduction == "mean":
             return focal_loss.mean()
-        elif self.reduction == 'sum':
+        elif self.reduction == "sum":
             return focal_loss.sum()
-        else:
-            return focal_loss
+        return focal_loss
