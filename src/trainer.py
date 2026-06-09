@@ -3,7 +3,7 @@ Training and evaluation logic for the CausalModel.
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -35,15 +35,20 @@ class ModelTrainer:
         device: str,
         class_weights: Optional[torch.Tensor] = None,
         gamma: float = 2.0,
+        label_smoothing: float = 0.0,
+        scheduler: Optional[object] = None,
     ) -> None:
         self.model = model
         self.optimizer = optimizer
         self.device = device
+        self.scheduler = scheduler
 
         if class_weights is not None:
             class_weights = class_weights.to(device)
 
-        self.criterion = FocalLoss(weight=class_weights, gamma=gamma)
+        self.criterion = FocalLoss(
+            weight=class_weights, gamma=gamma, label_smoothing=label_smoothing,
+        )
         self.scaler = GradScaler()
 
     # ------------------------------------------------------------------
@@ -110,6 +115,10 @@ class ModelTrainer:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
             self.scaler.step(self.optimizer)
             self.scaler.update()
+
+            # Step LR scheduler per batch (linear warmup + decay)
+            if self.scheduler is not None:
+                self.scheduler.step()
 
             mean_loss = (mean_loss * iteration + loss.detach()) / (iteration + 1)
             predicted_all += list(torch.argmax(outputs, dim=-1).cpu().numpy())

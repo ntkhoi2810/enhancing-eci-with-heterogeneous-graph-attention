@@ -14,7 +14,7 @@ from typing import List, Tuple
 
 import torch
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, get_linear_schedule_with_warmup
 
 from src.data import GraphTextCollate, load_and_preprocess_data
 from src.models import CausalModel
@@ -95,6 +95,36 @@ def create_dataloaders(
         pin_memory=True,
     )
     return dl_mask, dl_tag
+
+
+def build_optimizer(
+    model: CausalModel,
+    learning_rate: float,
+    weight_decay: float,
+) -> torch.optim.AdamW:
+    """Build AdamW with proper weight-decay grouping.
+
+    Best practice for fine-tuning transformers: apply weight decay to Linear
+    weights only, and exclude all bias terms and LayerNorm parameters.
+    """
+    no_decay = {"bias", "LayerNorm.weight", "LayerNorm.bias", "layer_norm.weight", "layer_norm.bias"}
+    param_groups = [
+        {
+            "params": [
+                p for n, p in model.named_parameters()
+                if p.requires_grad and not any(nd in n for nd in no_decay)
+            ],
+            "weight_decay": weight_decay,
+        },
+        {
+            "params": [
+                p for n, p in model.named_parameters()
+                if p.requires_grad and any(nd in n for nd in no_decay)
+            ],
+            "weight_decay": 0.0,
+        },
+    ]
+    return torch.optim.AdamW(param_groups, lr=learning_rate)
 
 
 def train_fold(
@@ -205,7 +235,7 @@ def main(args: argparse.Namespace) -> None:
             test_fold_ds, tokenizer, args.test_batchsize,
         )
 
-        # Model, optimizer, trainer
+        # Model, optimizer, scheduler, trainer
         model = CausalModel(
             bert_path=args.bert_path,
             d_model=args.d_model,
@@ -216,9 +246,27 @@ def main(args: argparse.Namespace) -> None:
             visualize=args.visualize,
         ).to(device)
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+        optimizer = build_optimizer(model, args.learning_rate, args.weight_decay)
+
+        # LR scheduler: linear warmup then linear decay to 0
+        steps_per_epoch = len(train_loaders[0])  # batches in mask dataloader
+        total_steps = steps_per_epoch * args.num_epochs
+        warmup_steps = int(total_steps * args.warmup_ratio)
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=total_steps,
+        )
+        logger.info(
+            "[*] Scheduler: %d total steps, %d warmup steps",
+            total_steps, warmup_steps,
+        )
+
         trainer = ModelTrainer(
-            model, optimizer, device, class_weights, gamma=args.focal_gamma,
+            model, optimizer, device, class_weights,
+            gamma=args.focal_gamma,
+            label_smoothing=args.label_smoothing,
+            scheduler=scheduler,
         )
 
         # Train
@@ -250,6 +298,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--patience", type=int, default=7)
     parser.add_argument("--test_batchsize", type=int, default=20)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
+    parser.add_argument("--weight_decay", type=float, default=0.01,
+                        help="Weight decay for Linear weights (bias/LayerNorm excluded)")
+    parser.add_argument("--warmup_ratio", type=float, default=0.1,
+                        help="Fraction of total steps used for LR warmup")
     parser.add_argument("--bert_path", type=str, default="FacebookAI/roberta-large")
     parser.add_argument("--d_model", type=int, default=1024)
     parser.add_argument("--num_heads", type=int, default=16)
@@ -258,7 +310,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--SEED", type=int, default=3407)
     parser.add_argument("--shuffle", action="store_true")
     parser.add_argument(
-        "--focal_gamma", type=float, default=2.0, help="Gamma value for Focal Loss",
+        "--focal_gamma", type=float, default=1.0, help="Gamma for Focal Loss (lower = less sensitive to outliers)",
+    )
+    parser.add_argument(
+        "--label_smoothing", type=float, default=0.1,
+        help="Label smoothing factor (0.0 = off, 0.1 = recommended)",
     )
     return parser.parse_args()
 
