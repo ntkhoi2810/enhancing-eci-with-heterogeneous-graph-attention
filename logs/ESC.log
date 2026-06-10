@@ -1,85 +1,61 @@
-
-Device: cuda
-Saved checkpoint at: checkpoints/ESC_roberta-large
-
+2026-06-09 09:39:54 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/FacebookAI/roberta-large/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-06-09 09:39:54 | huggingface_hub.utils._http | WARNING | Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-06-09 09:39:55 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/FacebookAI/roberta-large/722cf37b1afa9454edce342e7895e588b6ff1d59/config.json "HTTP/1.1 200 OK"
+2026-06-09 09:39:55 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/FacebookAI/roberta-large/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 09:39:55 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/FacebookAI/roberta-large/722cf37b1afa9454edce342e7895e588b6ff1d59/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-06-09 09:39:55 | httpx | INFO | HTTP Request: GET https://huggingface.co/api/models/FacebookAI/roberta-large/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-06-09 09:39:55 | httpx | INFO | HTTP Request: GET https://huggingface.co/api/models/FacebookAI/roberta-large/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-06-09 09:41:02 | __main__ | INFO | Device: cuda
+2026-06-09 09:41:02 | __main__ | INFO | Checkpoint directory: checkpoints/ESC_roberta-large
+2026-06-09 09:41:02 | __main__ | INFO | 
 === Training | Fold 1/5 ===
-[Epoch 1], loss: 0.5105302333831787
-Training validation:
-p: 0.7419, r: 0.0625, f1: 0.1153
--> NEW BEST F1: 11.53%. CHECKPOINT SAVED!
-[Epoch 2], loss: 0.4116774797439575
-Training validation:
-p: 0.5940, r: 0.5924, f1: 0.5932
--> NEW BEST F1: 59.32%. CHECKPOINT SAVED!
-[Epoch 3], loss: 0.338299959897995
-Training validation:
-p: 0.6937, r: 0.5109, f1: 0.5884
--> Early stopping! Patience: 1/7
-[Epoch 4], loss: 0.2861212491989136
-Training validation:
-p: 0.7696, r: 0.4538, f1: 0.5709
--> Early stopping! Patience: 2/7
-[Epoch 5], loss: 0.24117080867290497
-Training validation:
-p: 0.7867, r: 0.4810, f1: 0.5970
--> NEW BEST F1: 59.70%. CHECKPOINT SAVED!
-[Epoch 6], loss: 0.20796698331832886
-Training validation:
-p: 0.7678, r: 0.4402, f1: 0.5596
--> Early stopping! Patience: 1/7
-[Epoch 7], loss: 0.1851482391357422
-Training validation:
-p: 0.7610, r: 0.4239, f1: 0.5445
--> Early stopping! Patience: 2/7
-[Epoch 8], loss: 0.16921831667423248
-Training validation:
-p: 0.7660, r: 0.5870, f1: 0.6646
--> NEW BEST F1: 66.46%. CHECKPOINT SAVED!
-[Epoch 9], loss: 0.15233178436756134
-Training validation:
-p: 0.7074, r: 0.6766, f1: 0.6917
--> NEW BEST F1: 69.17%. CHECKPOINT SAVED!
-[Epoch 10], loss: 0.14238058030605316
-Training validation:
-p: 0.7169, r: 0.6467, f1: 0.6800
--> Early stopping! Patience: 1/7
-[Epoch 11], loss: 0.11858652532100677
-Training validation:
-p: 0.6944, r: 0.7038, f1: 0.6991
--> NEW BEST F1: 69.91%. CHECKPOINT SAVED!
-[Epoch 12], loss: 0.10659648478031158
-Training validation:
-p: 0.6938, r: 0.6712, f1: 0.6823
--> Early stopping! Patience: 1/7
-[Epoch 13], loss: 0.10772930085659027
-Training validation:
-p: 0.7216, r: 0.6549, f1: 0.6866
--> Early stopping! Patience: 2/7
-[Epoch 14], loss: 0.09654078632593155
-Training validation:
-p: 0.7304, r: 0.6848, f1: 0.7069
--> NEW BEST F1: 70.69%. CHECKPOINT SAVED!
-[Epoch 15], loss: 0.09280931949615479
-Training validation:
-p: 0.6667, r: 0.7283, f1: 0.6961
--> Early stopping! Patience: 1/7
-[Epoch 16], loss: 0.07876968383789062
-Training validation:
-p: 0.6937, r: 0.7201, f1: 0.7067
--> Early stopping! Patience: 2/7
-[Epoch 17], loss: 0.08259414881467819
-Training validation:
-p: 0.6923, r: 0.7337, f1: 0.7124
--> NEW BEST F1: 71.24%. CHECKPOINT SAVED!
-[Epoch 18], loss: 0.06834091991186142
-Training validation:
-p: 0.7166, r: 0.7147, f1: 0.7156
--> NEW BEST F1: 71.56%. CHECKPOINT SAVED!
-[Epoch 19], loss: 0.07088779658079147
-Training validation:
-p: 0.6658, r: 0.7310, f1: 0.6969
--> Early stopping! Patience: 1/7
-[Epoch 20], loss: 0.05901268869638443
-Training validation:
-p: 0.6865, r: 0.7201, f1: 0.7029
--> Early stopping! Patience: 2/7
+2026-06-09 09:41:02 | __main__ | INFO | [*] Class weights fold 1: Normal=0.6519  Causal=2.1457
+2026-06-09 09:41:09 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/FacebookAI/roberta-large/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 09:41:09 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/FacebookAI/roberta-large/722cf37b1afa9454edce342e7895e588b6ff1d59/config.json "HTTP/1.1 200 OK"
+2026-06-09 09:41:09 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/FacebookAI/roberta-large/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 09:41:09 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/FacebookAI/roberta-large/722cf37b1afa9454edce342e7895e588b6ff1d59/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-06-09 09:41:09 | httpx | INFO | HTTP Request: GET https://huggingface.co/api/models/FacebookAI/roberta-large/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-06-09 09:41:09 | httpx | INFO | HTTP Request: GET https://huggingface.co/api/models/FacebookAI/roberta-large/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-06-09 09:41:09 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/FacebookAI/roberta-large/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 09:41:09 | httpx | INFO | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/FacebookAI/roberta-large/722cf37b1afa9454edce342e7895e588b6ff1d59/config.json "HTTP/1.1 200 OK"
+[transformers] The new embeddings will be initialized from a multivariate normal distribution that has old embeddings' mean and covariance. As described in this article: https://nlp.stanford.edu/~johnhew/vocab-expansion.html. To disable this, use `mean_resizing=False`
+2026-06-09 09:41:12 | __main__ | INFO | [*] Scheduler: 19600 total steps, 1960 warmup steps
+/home/zeus/miniconda3/envs/cloudspace/lib/python3.12/site-packages/torch/optim/lr_scheduler.py:192: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  warnings.warn(
+2026-06-09 09:45:17 | __main__ | INFO | [Epoch 1] loss: 0.400665
+2026-06-09 09:45:17 | __main__ | INFO | Validation — P: 0.2018  R: 1.0000  F1: 0.3358
+2026-06-09 09:45:22 | __main__ | INFO | -> NEW BEST F1: 33.58%. Checkpoint saved!
+2026-06-09 09:49:27 | __main__ | INFO | [Epoch 2] loss: 0.373676
+2026-06-09 09:49:27 | __main__ | INFO | Validation — P: 0.2606  R: 0.2921  F1: 0.2754
+2026-06-09 09:49:27 | src.utils | INFO | Early stopping patience: 1/10
+2026-06-09 09:53:32 | __main__ | INFO | [Epoch 3] loss: 0.352127
+2026-06-09 09:53:32 | __main__ | INFO | Validation — P: 0.2944  R: 0.2159  F1: 0.2491
+2026-06-09 09:53:32 | src.utils | INFO | Early stopping patience: 2/10
+2026-06-09 09:57:38 | __main__ | INFO | [Epoch 4] loss: 0.309552
+2026-06-09 09:57:38 | __main__ | INFO | Validation — P: 0.3808  R: 0.3143  F1: 0.3443
+2026-06-09 09:57:44 | __main__ | INFO | -> NEW BEST F1: 34.43%. Checkpoint saved!
+2026-06-09 10:01:49 | __main__ | INFO | [Epoch 5] loss: 0.261220
+2026-06-09 10:01:49 | __main__ | INFO | Validation — P: 0.4745  R: 0.2063  F1: 0.2876
+2026-06-09 10:01:49 | src.utils | INFO | Early stopping patience: 1/10
+2026-06-09 10:05:55 | __main__ | INFO | [Epoch 6] loss: 0.232963
+2026-06-09 10:05:55 | __main__ | INFO | Validation — P: 0.4302  R: 0.3619  F1: 0.3931
+2026-06-09 10:06:00 | __main__ | INFO | -> NEW BEST F1: 39.31%. Checkpoint saved!
+2026-06-09 10:10:05 | __main__ | INFO | [Epoch 7] loss: 0.203028
+2026-06-09 10:10:05 | __main__ | INFO | Validation — P: 0.4118  R: 0.2889  F1: 0.3396
+2026-06-09 10:10:05 | src.utils | INFO | Early stopping patience: 1/10
+2026-06-09 10:14:10 | __main__ | INFO | [Epoch 8] loss: 0.188001
+2026-06-09 10:14:10 | __main__ | INFO | Validation — P: 0.4340  R: 0.2190  F1: 0.2911
+2026-06-09 10:14:10 | src.utils | INFO | Early stopping patience: 2/10
+2026-06-09 10:18:14 | __main__ | INFO | [Epoch 9] loss: 0.173509
+2026-06-09 10:18:14 | __main__ | INFO | Validation — P: 0.5253  R: 0.1651  F1: 0.2512
+2026-06-09 10:18:14 | src.utils | INFO | Early stopping patience: 3/10
+2026-06-09 10:22:19 | __main__ | INFO | [Epoch 10] loss: 0.167802
+2026-06-09 10:22:19 | __main__ | INFO | Validation — P: 0.5224  R: 0.1111  F1: 0.1832
+2026-06-09 10:22:19 | src.utils | INFO | Early stopping patience: 4/10
+2026-06-09 10:26:23 | __main__ | INFO | [Epoch 11] loss: 0.161074
+2026-06-09 10:26:23 | __main__ | INFO | Validation — P: 0.5349  R: 0.1460  F1: 0.2294
+2026-06-09 10:26:23 | src.utils | INFO | Early stopping patience: 5/10
+2026-06-09 10:30:28 | __main__ | INFO | [Epoch 12] loss: 0.145595
+2026-06-09 10:30:28 | __main__ | INFO | Validation — P: 0.4805  R: 0.1175  F1: 0.1888
+2026-06-09 10:30:28 | src.utils | INFO | Early stopping patience: 6/10
