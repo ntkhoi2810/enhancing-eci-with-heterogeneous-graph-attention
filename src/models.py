@@ -1,10 +1,10 @@
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 class ClozeAnalyzer(nn.Module):
-    def __init__(self, tokenizer, bert, device, visualize = False):
+    def __init__(self, tokenizer, bert, device, visualize=False):
         super(ClozeAnalyzer, self).__init__()
         self.tokenizer = tokenizer
         self.bert = bert
@@ -12,28 +12,13 @@ class ClozeAnalyzer(nn.Module):
         self.device = device
         
     def forward(self, x, groundtruth):
-
-        token_logits = self.bert(**x).logits
-        # mask_token_index = (x['input_ids'] == self.tokenizer.mask_token_id).int().argmax(dim=1)
-        # mask_token_logits = torch.stack( 
-        #     [ token_logits[idx, mask_token_index[idx], :] for idx in range(x['input_ids'].size(0))], 
-        #     dim=0)
+        # 1. Trích xuất ngữ cảnh qua cơ chế điền khuyết (Fill-in token embedding)
         batch_size = x['input_ids'].size(0)
         batch_indices = torch.arange(batch_size, device=self.device)
         mask_token_index = (x['input_ids'] == self.tokenizer.mask_token_id).int().argmax(dim=1)
         
+        token_logits = self.bert(**x).logits
         mask_token_logits = token_logits[batch_indices, mask_token_index, :]
-
-        # predicted_token_ids = torch.argmax(mask_token_logits, dim=-1)
-    
-        # new_input_ids = x['input_ids'].clone()
-        # new_input_ids[batch_indices, mask_token_index] = predicted_token_ids
-        
-        # outputs = self.bert.base_model(
-        #     input_ids=new_input_ids,
-        #     attention_mask=x['attention_mask']
-        # ).last_hidden_state
-
         soft_probs = torch.softmax(mask_token_logits, dim=-1) 
 
         word_embeddings = self.bert.get_input_embeddings().weight
@@ -42,67 +27,129 @@ class ClozeAnalyzer(nn.Module):
         inputs_embeds = self.bert.get_input_embeddings()(x['input_ids'])
         inputs_embeds[batch_indices, mask_token_index] = predicted_embeds.to(inputs_embeds.dtype)
 
-        outputs = self.bert.base_model(
+        x_outputs = self.bert.base_model(
             inputs_embeds=inputs_embeds,
             attention_mask=x['attention_mask']
         ).last_hidden_state
                 
-        ret = outputs[batch_indices, mask_token_index, :].unsqueeze(1)
+        cloze_feature = x_outputs[batch_indices, mask_token_index, :] # [B, d_model]
         
-        return ret
+        # 2. Trích xuất ma trận đặc trưng ngữ cảnh động từ chuỗi nguyên bản "groundtruth"
+        gt_outputs = self.bert.base_model(**groundtruth).last_hidden_state # [B, seq_len, d_model]
         
-        # gen_token = [ self.tokenizer.decode(token_id) for token_id in torch.argmax(mask_token_logits, dim=-1) ]
-        # og_mask_sentences = [ self.tokenizer.decode(sequence[1:-1]) for sequence in x['input_ids'] ] 
-        # gen_sentences = [sentence.replace(self.tokenizer.mask_token, gen_token[idx]) for idx, sentence in enumerate( og_mask_sentences)]
-        # if self.visualize:
-        #     og_sentences=[ self.tokenizer.decode(sequence[1:-1]) for sequence in groundtruth['input_ids'] ] 
-        #     print(f"generated tokens: {gen_token}")
-        #     print(f"original sentences: {og_sentences}")
-        #     print(f"original mask sentences: {og_mask_sentences}")
-        #     print(f"generated sentences: {gen_sentences}")
+        return cloze_feature, gt_outputs
 
-        # outputs = self.bert.base_model(
-        #     **self.tokenizer(gen_sentences, return_tensors="pt", padding=True).to(self.device)
-        #     ).last_hidden_state
+
+class NodeAttention(nn.Module):
+    def __init__(self, in_size, out_size):
+        super(NodeAttention, self).__init__()
+        self.W = nn.Linear(in_size, out_size)
+        self.attn = nn.Linear(out_size * 2, 1)
+
+    def forward(self, h, adj):
+        # h: [B, N, D]
+        Wh = self.W(h) 
+        a1 = self.attn.weight[:, :Wh.shape[-1]]
+        a2 = self.attn.weight[:, Wh.shape[-1]:]
+        attn_i = torch.matmul(Wh, a1.T)
+        attn_j = torch.matmul(Wh, a2.T)
+        e = F.leaky_relu(attn_i + attn_j.transpose(1, 2)) 
         
-        # ret = torch.stack( 
-        #     [outputs[idx, mask_token_index[idx], :] for idx in range(x['input_ids'].size(0))], 
-        #     dim=0).unsqueeze(1)
+        zero_vec = -9e15 * torch.ones_like(e)
+        attention = torch.where(adj > 0, e, zero_vec)
+        attention = F.softmax(attention, dim=-1)
+        return torch.bmm(attention, Wh)
+
+class SemanticAttention(nn.Module):
+    def __init__(self, in_size, hidden_size=128):
+        super(SemanticAttention, self).__init__()
+        self.project = nn.Sequential(
+            nn.Linear(in_size, hidden_size),
+            nn.Tanh(),
+            nn.Linear(hidden_size, 1, bias=False)
+        )
+
+    def forward(self, z):
+        # z: [B, num_meta_paths, D]
+        w = self.project(z).mean(0) # [num_meta_paths, 1]
+        beta = torch.softmax(w, dim=0)
+        beta = beta.expand((z.shape[0],) + beta.shape) # [B, num_meta_paths, 1]
+        return (beta * z).sum(1) # [B, D]
+
+class HeterogeneousGraphAttentionNetwork(nn.Module):
+    def __init__(self, in_size, out_size, num_meta_paths=2):
+        super(HeterogeneousGraphAttentionNetwork, self).__init__()
+        # Chú ý cấp nút (Node-level attention)
+        self.node_attentions = nn.ModuleList([NodeAttention(in_size, out_size) for _ in range(num_meta_paths)])
+        # Chú ý cấp ngữ nghĩa (Semantic-level attention)
+        self.semantic_attention = SemanticAttention(out_size)
+
+    def forward(self, h, graph_data=None):
+        batch_size, seq_len, _ = h.shape
         
-        # return ret 
+        # Nếu chưa có cấu trúc đồ thị từ data loader, tạo các ma trận kề mặc định (self-loop và fully connected)
+        if graph_data is None or 'adjs' not in graph_data:
+            adjs = [
+                torch.eye(seq_len, device=h.device).unsqueeze(0).expand(batch_size, -1, -1),
+                torch.ones((seq_len, seq_len), device=h.device).unsqueeze(0).expand(batch_size, -1, -1)
+            ]
+        else:
+            adjs = graph_data['adjs']
+
+        semantic_embeddings = []
+        for i, node_attn in enumerate(self.node_attentions):
+            z = node_attn(h, adjs[i]) # Quá trình lan truyền đa hop dọc theo cạnh
+            
+            # Tổng hợp đặc trưng từ các nút lân cận
+            # (Thực tế sẽ sử dụng e1_idx, e2_idx từ graph_data để trích xuất đặc trưng sự kiện)
+            # Ở đây dùng average pooling tạm thời đại diện cho toàn bộ đồ thị
+            z_pooled = z.mean(dim=1) 
+            semantic_embeddings.append(z_pooled)
+            
+        semantic_embeddings = torch.stack(semantic_embeddings, dim=1) # [B, num_meta_paths, out_size]
+        return self.semantic_attention(semantic_embeddings) # [B, out_size]
+
+
+class FeatureFusionLayer(nn.Module):
+    def __init__(self, text_dim, graph_dim, out_dim):
+        super(FeatureFusionLayer, self).__init__()
+        self.text_proj = nn.Linear(text_dim, out_dim)
+        self.graph_proj = nn.Linear(graph_dim, out_dim)
         
+        # Cơ chế cổng điều tiết (Gating mechanism)
+        self.gate = nn.Sequential(
+            nn.Linear(text_dim + graph_dim, out_dim),
+            nn.Sigmoid()
+        )
+        
+    def forward(self, text_feat, graph_feat):
+        t_proj = self.text_proj(text_feat)
+        g_proj = self.graph_proj(graph_feat)
+        gate_val = self.gate(torch.cat([text_feat, graph_feat], dim=-1))
+        
+        # Hợp nhất tương tác bằng cơ chế gating
+        fused = gate_val * t_proj + (1 - gate_val) * g_proj
+        return fused
+
 
 class Discriminator(nn.Module):
-    def __init__(self, d_model, num_heads, dropout_rate, tokenizer, bert, device):
+    def __init__(self, d_model, dropout_rate):
         super(Discriminator, self).__init__()
-        self.mha = nn.MultiheadAttention(d_model, num_heads)
-        self.tokenizer = tokenizer
-        self.bert = bert
-        self.device = device
-        # FFN
-        self.fc1 = nn.Linear(d_model, 4 * d_model)
-        self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(dropout_rate)
-        self.fc2 = nn.Linear(4 * d_model, d_model)
-        self.fc3 = nn.Linear(d_model, 2)
-        self.layer_norm = nn.LayerNorm(d_model)
+        # Mạng neural truyền thẳng đa lớp kết hợp với kích hoạt phi tuyến (MLP)
+        self.net = nn.Sequential(
+            nn.Linear(d_model, d_model * 2),
+            nn.GELU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(d_model * 2, d_model // 2),
+            nn.GELU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(d_model // 2, 2)
+        )
 
-    def forward(self, x, groundtruth):
-        
-        key = self.bert.base_model(**groundtruth).last_hidden_state.permute(1, 0, 2)
-        value =key
-        x = x.permute(1, 0, 2)
-        attn_output, attn_weights = self.mha(x, key, value)
-        attn_output = attn_output.permute(1, 0, 2)
-
-        # FFN
-        out=self.dropout(self.relu(self.fc1(attn_output)))
-        out=self.fc2(out)
-        out=self.layer_norm(attn_output+out)
-        out=self.fc3(out) 
-        
+    def forward(self, fused_feature):
+        # Bộ trọng tài xử lý tương tác nhân quả cấp cao
+        out = self.net(fused_feature)
         return out
-      
 
 
 class Causal_Model(nn.Module):
@@ -115,12 +162,25 @@ class Causal_Model(nn.Module):
         self.bert = AutoModelForMaskedLM.from_pretrained(bert_path)
         self.bert.resize_token_embeddings(len(self.tokenizer))
         
-        self.generator = ClozeAnalyzer(self.tokenizer, self.bert, device, visualize)
-        self.discriminator = Discriminator(d_model, num_heads, dropout_rate, self.tokenizer, self.bert, device)
+        # Bốn giai đoạn phối hợp
+        self.cloze_analyzer = ClozeAnalyzer(self.tokenizer, self.bert, device, visualize)
+        self.han = HeterogeneousGraphAttentionNetwork(in_size=d_model, out_size=d_model, num_meta_paths=2)
+        self.feature_fusion = FeatureFusionLayer(text_dim=d_model, graph_dim=d_model, out_dim=d_model)
+        self.discriminator = Discriminator(d_model, dropout_rate)
         
 
-    def forward(self, x, groundtruth):
+    def forward(self, x, groundtruth, graph_data=None):
+        # 1. Khối trích xuất ngữ cảnh
+        cloze_feature, gt_outputs = self.cloze_analyzer(x, groundtruth) 
         
-        out=self.generator(x, groundtruth) 
-        out=self.discriminator(out, groundtruth)
+        # 2. Mạng đồ thị dị thể (HAN)
+        graph_feature = self.han(gt_outputs, graph_data)
+        
+        # 3. Tầng dung hợp đặc trưng
+        fused_feature = self.feature_fusion(cloze_feature, graph_feature)
+        
+        # 4. Khối phân biệt tương tác
+        out = self.discriminator(fused_feature)
+        
+        # (Softmax được áp dụng bên ngoài khi tính Loss/Metrics)
         return out
