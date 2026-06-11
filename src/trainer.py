@@ -6,10 +6,11 @@ from torch.amp import autocast, GradScaler
 from tqdm import tqdm
 
 class ModelTrainer:
-    def __init__(self, model, optimizer, device, class_weights=None, gamma=2.0):
+    def __init__(self, model, optimizer, device, class_weights=None, gamma=2.0, scheduler=None):
         self.model = model
         self.optimizer = optimizer
         self.device = device
+        self.scheduler = scheduler
 
         if class_weights is not None:
             class_weights = class_weights.to(device)
@@ -27,12 +28,18 @@ class ModelTrainer:
         pbar = tqdm(zip(dataloader_mask, dataloader_tag), total=len(dataloader_mask), desc=f"Train {epoch_info}", dynamic_ncols=True, leave=False)
         
         for iteration, (mask_data, tag_data) in enumerate(pbar):
+            # Lấy graph_data ra trước khi đẩy lên GPU
+            graph_data = tag_data.pop('graph_data', None)
+            
             mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
             labels = tag_data['labels'].to(self.device)
             tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
             
+            if graph_data is not None:
+                graph_data['adjs'] = [adj.to(self.device) for adj in graph_data['adjs']]
+            
             with autocast('cuda'):
-                outputs = self.model(mask_data, tag_data).squeeze(1)
+                outputs = self.model(mask_data, tag_data, graph_data=graph_data).squeeze(1)
                 loss = self.criterion(outputs, labels)
             
             self.optimizer.zero_grad()
@@ -46,6 +53,9 @@ class ModelTrainer:
             
             self.scaler.step(self.optimizer)
             self.scaler.update()
+            
+            if self.scheduler is not None:
+                self.scheduler.step()
             
             mean_loss = (mean_loss * iteration + loss.detach()) / (iteration + 1)
             predicted_all += list(torch.argmax(outputs, dim=-1).cpu().numpy())
@@ -64,11 +74,17 @@ class ModelTrainer:
         
         with torch.no_grad():
             for iteration, (mask_data, tag_data) in enumerate(pbar):
+                # Lấy graph_data ra trước khi đẩy lên GPU
+                graph_data = tag_data.pop('graph_data', None)
+                
                 labels = tag_data['labels'].to(self.device)
                 mask_data = {k: v.to(self.device) for k, v in mask_data.items() if k != 'labels'}
                 tag_data = {k: v.to(self.device) for k, v in tag_data.items() if k != 'labels'}
                 
-                outputs = self.model(mask_data, tag_data).squeeze(1)
+                if graph_data is not None:
+                    graph_data['adjs'] = [adj.to(self.device) for adj in graph_data['adjs']]
+                
+                outputs = self.model(mask_data, tag_data, graph_data=graph_data).squeeze(1)
                 loss = self.criterion(outputs, labels)
                 mean_loss_test = (mean_loss_test * iteration + loss.detach()) / (iteration + 1)
 

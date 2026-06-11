@@ -6,3 +6,4 @@ tqdm
 transformers
 datasets
 scikit-learn
+spacy

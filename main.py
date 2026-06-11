@@ -8,7 +8,8 @@ from transformers import AutoTokenizer, DataCollatorWithPadding
 from tqdm import tqdm
 
 from src.utils import setup_seed, record_best_scores, EarlyStopping
-from src.data import load_and_preprocess_data, negative_sampling
+from src.data import load_and_preprocess_data, negative_sampling, tokenize_and_build_graph, GraphDataCollator
+from transformers import get_linear_schedule_with_warmup
 from src.models import Causal_Model
 from src.trainer import ModelTrainer
 
@@ -70,12 +71,13 @@ def main(args):
         ).remove_columns(cols_to_remove)
         
         tagged_train = train_fold.map(
-            tokenize_col("event_tagged_sentence"), 
+            lambda x: tokenize_and_build_graph(x, tokenizer, "event_tagged_sentence"), 
             batched=True, batch_size=32
         ).remove_columns(cols_to_remove)
         
         masked_train.set_format("torch")
-        tagged_train.set_format("torch")
+        # LƯU Ý: Chỉ set_format("torch") cho các cột của HF để không làm hỏng list 2D của ma trận graph
+        tagged_train.set_format(type="torch", columns=['input_ids', 'attention_mask', 'labels'])
 
         masked_test = test_fold.map(
             tokenize_col("event_masked_sentence"), 
@@ -83,18 +85,16 @@ def main(args):
             ).remove_columns(cols_to_remove)
         
         tagged_test = test_fold.map(
-            tokenize_col("event_tagged_sentence"), 
+            lambda x: tokenize_and_build_graph(x, tokenizer, "event_tagged_sentence"), 
             batched=True, batch_size=32
         ).remove_columns(cols_to_remove)
         
         masked_test.set_format("torch")
-        tagged_test.set_format("torch")
+        # LƯU Ý: Chỉ set_format("torch") cho các cột của HF để không làm hỏng list 2D của ma trận graph
+        tagged_test.set_format(type="torch", columns=['input_ids', 'attention_mask', 'labels'])
 
         data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-        # dataloader_mask_train = DataLoader(masked_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator)
-        # dataloader_tag_train = DataLoader(tagged_train, shuffle=False, batch_size=args.train_batchsize, collate_fn=data_collator)
-        # dataloader_mask_test = DataLoader(masked_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator)
-        # dataloader_tag_test = DataLoader(tagged_test, shuffle=False, batch_size=args.test_batchsize, collate_fn=data_collator)
+        graph_collator = GraphDataCollator(tokenizer=tokenizer)
         
         dataloader_mask_train = DataLoader(
             masked_train, 
@@ -108,7 +108,7 @@ def main(args):
             tagged_train, 
             shuffle=False, 
             batch_size=args.train_batchsize, 
-            collate_fn=data_collator, 
+            collate_fn=graph_collator, 
             num_workers=4, 
             pin_memory=True
         )
@@ -124,7 +124,7 @@ def main(args):
             tagged_test, 
             shuffle=False, 
             batch_size=args.test_batchsize, 
-            collate_fn=data_collator, 
+            collate_fn=graph_collator, 
             num_workers=4, 
             pin_memory=True
         )
@@ -142,12 +142,36 @@ def main(args):
             visualize=args.visualize
         ).to(device)
         
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+        no_decay = ['bias', 'LayerNorm.weight']
         
-        trainer = ModelTrainer(model, optimizer, device, class_weights, gamma=args.focal_gamma)
+        bert_params = []
+        other_params = []
+        for n, p in model.named_parameters():
+            if 'bert.' in n:
+                bert_params.append((n, p))
+            else:
+                other_params.append((n, p))
+                
+        optimizer_grouped_parameters = [
+            # BERT params
+            {'params': [p for n, p in bert_params if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01, 'lr': args.learning_rate},
+            {'params': [p for n, p in bert_params if any(nd in n for nd in no_decay)], 'weight_decay': 0.0, 'lr': args.learning_rate},
+            # Other params
+            {'params': [p for n, p in other_params if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01, 'lr': args.learning_rate * 10},
+            {'params': [p for n, p in other_params if any(nd in n for nd in no_decay)], 'weight_decay': 0.0, 'lr': args.learning_rate * 10}
+        ]
+        
+        optimizer = torch.optim.AdamW(optimizer_grouped_parameters)
+        
+        total_steps = len(dataloader_mask_train) * args.num_epochs
+        warmup_steps = int(total_steps * 0.05)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
+        
+        trainer = ModelTrainer(model, optimizer, device, class_weights, gamma=args.focal_gamma, scheduler=scheduler)
 
 
         early_stopping = EarlyStopping(patience=args.patience, verbose=True)
+        best_f1 = 0.0
 
         for epoch in range(args.num_epochs):
 
@@ -160,11 +184,11 @@ def main(args):
             print(f"Training validation:")
             print(f"p: {test_p:.4f}, r: {test_r:.4f}, f1: {test_f1:.4f}")
             
-            is_new_best = early_stopping(test_f1 * 100)
-        
-            if is_new_best:
+            current_f1 = test_f1 * 100
+            if current_f1 > best_f1:
+                best_f1 = current_f1
                 torch.save(model.state_dict(), os.path.join(checkpoint_path, f'best_model_fold{i+1}.pt'))
-                print(f"-> NEW BEST F1: {test_f1*100:.2f}%. CHECKPOINT SAVED!")
+                print(f"-> NEW BEST F1: {best_f1:.2f}%. CHECKPOINT SAVED!")
                 current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 record_best_scores(
                     current_time, 
@@ -173,9 +197,10 @@ def main(args):
                     test_f1, 
                     os.path.join(checkpoint_path, f'best_scores_fold{i+1}.txt')
                 )
-                
+            
+            early_stopping(current_f1)
             if early_stopping.early_stop:
-                print(f"\n[!] EARLY STOPPING TRIGGED | FOLD {i+1}!")
+                print(f"Early stopping triggered at epoch {epoch+1}")
                 break
         
         print(f"=== END OF TRAINING | FOLD {i+1} ===\n")
@@ -188,7 +213,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_folds', type=int, default=5)
     parser.add_argument('--num_epochs', type=int, default=50)
     parser.add_argument('--train_batchsize', type=int, default=20)
-    parser.add_argument('--patience', type=int, default=7)
+    parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--test_batchsize', type=int, default=20)
     parser.add_argument('--learning_rate', type=float, default=1e-5)
     parser.add_argument('--bert_path', type=str, default='FacebookAI/roberta-large')

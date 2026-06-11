@@ -10,9 +10,10 @@ class FocalLoss(nn.Module):
         self.reduction = reduction
 
     def forward(self, inputs, targets):
-        ce_loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction='none')
+        ce_loss_unweighted = F.cross_entropy(inputs, targets, reduction='none')
+        pt = torch.exp(-ce_loss_unweighted)
         
-        pt = torch.exp(-ce_loss)
+        ce_loss = F.cross_entropy(inputs, targets, weight=self.weight, reduction='none')
         
         focal_loss = ((1 - pt) ** self.gamma) * ce_loss
         

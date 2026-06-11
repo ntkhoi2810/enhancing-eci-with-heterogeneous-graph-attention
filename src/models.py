@@ -84,7 +84,7 @@ class HeterogeneousGraphAttentionNetwork(nn.Module):
         # Chú ý cấp ngữ nghĩa (Semantic-level attention)
         self.semantic_attention = SemanticAttention(out_size)
 
-    def forward(self, h, graph_data=None):
+    def forward(self, h, graph_data=None, input_ids=None, e1_id=None, e2_id=None):
         batch_size, seq_len, _ = h.shape
         
         # Nếu chưa có cấu trúc đồ thị từ data loader, tạo các ma trận kề mặc định (self-loop và fully connected)
@@ -100,10 +100,21 @@ class HeterogeneousGraphAttentionNetwork(nn.Module):
         for i, node_attn in enumerate(self.node_attentions):
             z = node_attn(h, adjs[i]) # Quá trình lan truyền đa hop dọc theo cạnh
             
-            # Tổng hợp đặc trưng từ các nút lân cận
-            # (Thực tế sẽ sử dụng e1_idx, e2_idx từ graph_data để trích xuất đặc trưng sự kiện)
-            # Ở đây dùng average pooling tạm thời đại diện cho toàn bộ đồ thị
-            z_pooled = z.mean(dim=1) 
+            # Trích xuất đặc trưng của 2 sự kiện e1 và e2
+            if input_ids is not None and e1_id is not None and e2_id is not None:
+                batch_indices = torch.arange(batch_size, device=h.device)
+                
+                e1_indices = (input_ids == e1_id).int().argmax(dim=1)
+                e2_indices = (input_ids == e2_id).int().argmax(dim=1)
+                
+                e1_repr = z[batch_indices, e1_indices]
+                e2_repr = z[batch_indices, e2_indices]
+                
+                # Tính trung bình cộng đặc trưng 2 event
+                z_pooled = (e1_repr + e2_repr) / 2.0
+            else:
+                z_pooled = z.mean(dim=1) 
+                
             semantic_embeddings.append(z_pooled)
             
         semantic_embeddings = torch.stack(semantic_embeddings, dim=1) # [B, num_meta_paths, out_size]
@@ -162,6 +173,9 @@ class Causal_Model(nn.Module):
         self.bert = AutoModelForMaskedLM.from_pretrained(bert_path)
         self.bert.resize_token_embeddings(len(self.tokenizer))
         
+        self.e1_id = self.tokenizer.convert_tokens_to_ids('<e1>')
+        self.e2_id = self.tokenizer.convert_tokens_to_ids('<e2>')
+        
         # Bốn giai đoạn phối hợp
         self.cloze_analyzer = ClozeAnalyzer(self.tokenizer, self.bert, device, visualize)
         self.han = HeterogeneousGraphAttentionNetwork(in_size=d_model, out_size=d_model, num_meta_paths=2)
@@ -174,7 +188,7 @@ class Causal_Model(nn.Module):
         cloze_feature, gt_outputs = self.cloze_analyzer(x, groundtruth) 
         
         # 2. Mạng đồ thị dị thể (HAN)
-        graph_feature = self.han(gt_outputs, graph_data)
+        graph_feature = self.han(gt_outputs, graph_data, groundtruth['input_ids'], self.e1_id, self.e2_id)
         
         # 3. Tầng dung hợp đặc trưng
         fused_feature = self.feature_fusion(cloze_feature, graph_feature)
